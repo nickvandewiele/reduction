@@ -413,11 +413,7 @@ def compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrat
     return r
 
 
-def getConcentration(spc, coreSpeciesConcentrations):
-    """
-    Returns the concentration of the species in the 
-    reaction system.
-    """
+def search_index(spc):
     assert isinstance(spc, Species)
 
     spc_index = -1
@@ -428,6 +424,15 @@ def getConcentration(spc, coreSpeciesConcentrations):
             break
 
     assert spc_index != -1
+    return spc_index
+
+def getConcentration(spc, coreSpeciesConcentrations):
+    """
+    Returns the concentration of the species in the 
+    reaction system.
+    """
+
+    spc_index = search_index(spc)
     return coreSpeciesConcentrations[spc_index]
 
 def calc_rij(rxn_j, spc_i, reactant_or_product, T, P, coreSpeciesConcentrations):
