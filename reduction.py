@@ -57,7 +57,7 @@ class ReductionReaction(object):
 
 class ReductionDriver(object):
     """docstring for ReductionDriver"""
-    def __init__(self, core_species, working_dir, tolerance):
+    def __init__(self, core_species, working_dir):
         super(ReductionDriver, self).__init__()
 
         """
@@ -71,20 +71,6 @@ class ReductionDriver(object):
 
         """
         self.working_dir = working_dir
-
-        """
-        Tolerance to decide whether a reaction is unimportant for the formation/destruction of a species
-
-        Tolerance is a floating point value between 0 and 1.
-
-        A high tolerance means that many reactions will be deemed unimportant, and the reduced model will be drastically
-        smaller.
-
-        A low tolerance means that few reactions will be deemed unimportant, and the reduced model will only differ from the full
-        model by a few reactions.
-        """
-
-        self.tolerance = tolerance
 
 
 def read_simulation_profile(filepath):
@@ -162,7 +148,7 @@ def simulate_all(rmg):
         
 
 
-def initialize(core_species, working_dir, tol):
+def initialize(core_species, working_dir):
     """
     Create a global reduction driver variable that will share its state
     with functions that need globally accessible variables.
@@ -170,10 +156,10 @@ def initialize(core_species, working_dir, tol):
     """
     global reduction
     assert os.path.isdir(working_dir)
-    reduction = ReductionDriver(core_species, working_dir, tol)
+    reduction = ReductionDriver(core_species, working_dir)
     
 
-def find_unimportant_reactions(reactions, rmg):
+def find_unimportant_reactions(reactions, rmg, tolerance):
     """
     This function:
 
@@ -195,7 +181,18 @@ def find_unimportant_reactions(reactions, rmg):
     # start the model reduction
     reduce_reactions = [ReductionReaction(rxn) for rxn in reactions]
 
-    closure = assess_reaction_closure(rmg.reactionSystems, reduce_reactions, reduction.tolerance)
+    """
+    Tolerance to decide whether a reaction is unimportant for the formation/destruction of a species
+
+    Tolerance is a floating point value between 0 and 1.
+
+    A high tolerance means that many reactions will be deemed unimportant, and the reduced model will be drastically
+    smaller.
+
+    A low tolerance means that few reactions will be deemed unimportant, and the reduced model will only differ from the full
+    model by a few reactions.
+    """
+    closure = assess_reaction_closure(rmg.reactionSystems, reduce_reactions, tolerance)
     reactions_to_be_removed = list(itertools.ifilterfalse(closure, reduce_reactions))
 
     # reactions_to_be_removed = []
@@ -630,3 +627,5 @@ def compute_conversion(target, outputDirectory, reactionModel, reactionSystem, r
     #compute conversion:
     conv = 1 - (reactionSystem.y[target_index] / y0[target_index])
     return conv
+
+
