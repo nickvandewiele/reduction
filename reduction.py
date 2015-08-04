@@ -20,6 +20,41 @@ Guidelines for the chemkin input files:
 
 CLOSE_TO_ZERO = 1E-10
 
+class ReductionReaction(object):
+    """
+    A class that enhances RMG-Py's  Reaction object
+    by providing storage for the forward (kf) and backward
+    (kb) rate coefficient.
+
+    Once k is computed, it is stored and fetched
+    when requested.
+
+    """
+    def __init__(self, rmg_reaction):
+        super(ReductionReaction, self).__init__()
+        self.rmg_reaction = rmg_reaction
+        self.reactants = rmg_reaction.reactants
+        self.products = rmg_reaction.products
+        self.kf = None
+        self.kb = None
+    
+    def __str__(self):
+        return str(self.rmg_reaction)
+
+    def getRateCoefficient(self, T,P):
+        if self.kf is None:
+            self.kf = self.rmg_reaction.getRateCoefficient(T,P)
+            return self.kf
+        else: return self.kf
+    
+    def getReverseRateCoefficient(self, T, P):
+        if self.kb is None:
+            kf = self.getRateCoefficient(T,P) 
+            self.kb = kf / self.rmg_reaction.getEquilibriumConstant(T)
+            return self.kb
+        else: return self.kb
+    
+
 class ReductionDriver(object):
     """docstring for ReductionDriver"""
     def __init__(self, core_species, working_dir, tolerance, number_of_time_steps=None):
@@ -175,8 +210,10 @@ def find_unimportant_reactions(reactions, rmg):
     simulate_all(rmg)
 
     # start the model reduction
-    closure = assess_reaction_closure(rmg.reactionSystems, reactions, reduction.tolerance)
-    reactions_to_be_removed = list(itertools.ifilterfalse(closure, reactions))
+    reduce_reactions = [ReductionReaction(rxn) for rxn in reactions]
+
+    closure = assess_reaction_closure(rmg.reactionSystems, reduce_reactions, reduction.tolerance)
+    reactions_to_be_removed = list(itertools.ifilterfalse(closure, reduce_reactions))
 
     # reactions_to_be_removed = []
     # for rxn_j in model:
@@ -184,9 +221,7 @@ def find_unimportant_reactions(reactions, rmg):
     #     if not isImportant: reactions_to_be_removed.append(rxn_j)
 
 
-
-
-    return reactions_to_be_removed
+    return [rxn.rmg_reaction for rxn in reactions_to_be_removed]
 
 
 def assess_reaction_closure(reactionSystems, reactions, tolerance):
@@ -201,7 +236,7 @@ def assess_reaction_closure(reactionSystems, reactions, tolerance):
     
     return myfilter
 
-def assess_reaction(rxn_j, reactionSystems, reactions, tolerance):
+def assess_reaction(rxn, reactionSystems, reactions, tolerance):
     """
     Returns whether the reaction is important or not in the reactions.
 
@@ -214,7 +249,7 @@ def assess_reaction(rxn_j, reactionSystems, reactions, tolerance):
 
     """
     wd = reduction.working_dir
-    
+
     # read in the intermediate state variables
     for system_index, reactionSystem in enumerate(reactionSystems):
 
@@ -239,24 +274,24 @@ def assess_reaction(rxn_j, reactionSystems, reactions, tolerance):
             # print coreSpeciesConcentrations
             
             # print 'Species concentrations at {}: {}'.format(timepoint, reactionSystem.coreSpeciesConcentrations)
-            for species_i in rxn_j.reactants:
-                if isImportant(rxn_j, species_i, reactions, 'reactant', tolerance, T, P, coreSpeciesConcentrations):
+            for species_i in rxn.reactants:
+                if isImportant(rxn, species_i, reactions, 'reactant', tolerance, T, P, coreSpeciesConcentrations):
                     return True
 
             #only continue if the reaction is not important yet.
-            for species_i in rxn_j.products:
-                if isImportant(rxn_j, species_i, reactions, 'product', tolerance, T, P, coreSpeciesConcentrations):
+            for species_i in rxn.products:
+                if isImportant(rxn, species_i, reactions, 'product', tolerance, T, P, coreSpeciesConcentrations):
                     return True
 
     return False
 
 
 
-def isImportant(rxn_j, species_i, reactions, reactant_or_product, tolerance, T, P, coreSpeciesConcentrations):
+def isImportant(rxn, species_i, reactions, reactant_or_product, tolerance, T, P, coreSpeciesConcentrations):
     """
     This function computes:
     - Ri = R(species_i)
-    - rij = r(rxn_j)
+    - rij = r(rxn)
     - alpha = ratio of rij / Ri
     
     Range of values of alpha:
@@ -268,28 +303,28 @@ def isImportant(rxn_j, species_i, reactions, reactant_or_product, tolerance, T, 
     else:
         this reaction is unimportant for this species.
 
-    Returns whether or not rxn_j is important for species_i.
+    Returns whether or not rxn is important for species_i.
     keep = True
     remove = False
     """
     #calc Ri, where i = species
 
 
-    rij = calc_rij(rxn_j, species_i, reactant_or_product, T, P, coreSpeciesConcentrations) 
+    rij = calc_rij(rxn, species_i, reactant_or_product, T, P, coreSpeciesConcentrations) 
     Ri = calc_Ri(species_i, rij, reactions, reactant_or_product, T, P, coreSpeciesConcentrations)
 
     # assert Ri != 0, "rij: {0}, Ri: {1}, rxn: {2}, species: {3}, reactant: {4}"\
-    # .format(rij, Ri, rxn_j, species_i, reactant_or_product)
+    # .format(rij, Ri, rxn, species_i, reactant_or_product)
 
     # if rij == 0  and Ri == 0:
     
     if np.any(np.absolute([rij, Ri]) < CLOSE_TO_ZERO):
        # print "rij: {0}, Ri: {1}, rxn: {2}, species: {3}, reactant: {4}, alpha: {5}, tolerance: {6}"\
-       #  .format(rij, Ri, rxn_j, species_i, reactant_or_product, 'N/A', tolerance) 
+       #  .format(rij, Ri, rxn, species_i, reactant_or_product, 'N/A', tolerance) 
        return False
 
     else:
-        assert Ri != 0, "rij: {0}, Ri: {1}, rxn: {2}, species: {3}, reactant: {4}".format(rij, Ri, rxn_j, species_i, reactant_or_product)
+        assert Ri != 0, "rij: {0}, Ri: {1}, rxn: {2}, species: {3}, reactant: {4}".format(rij, Ri, rxn, species_i, reactant_or_product)
         alpha = rij / Ri
         if alpha < 0: return False
 
@@ -353,8 +388,7 @@ def compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrat
         species_list = rxn_j.reactants
         reactant_or_product = 'reactant'
     elif forward_or_reverse == 'reverse':
-        kf = rxn_j.getRateCoefficient(T,P) 
-        kb = kf / rxn_j.getEquilibriumConstant(T)
+        kb = rxn_j.getReverseRateCoefficient(T,P)
         k = kb
         species_list = rxn_j.products
         reactant_or_product = 'product'
@@ -488,7 +522,6 @@ def calc_Ri(spc_i,rij, reactions, reactant_or_product, T, P, coreSpeciesConcentr
 def print_info(rxn, spc, important):
     print 'Is reaction {0} important for species {1}: {2}'.format(rxn, spc, important)
  
-    
 
 def loadRMGPyJob(inputFile, chemkinFile, speciesDict=None):
     """
