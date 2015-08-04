@@ -599,3 +599,34 @@ def saveChemkinFile(path, species, reactions, verbose = True):
 
     with open(path, 'w') as f:
         f.write(s)
+
+def compute_conversion(target, outputDirectory, reactionModel, reactionSystem, reactionSystem_index, atol, rtol):
+    """
+    Computes the conversion of a target molecule by
+
+    - searching the index of the target species in the core species
+    of the global reduction variable
+    - resetting the reaction system, initialing with empty variables
+    - fetching the initial moles variable y0
+    - running the simulation at the conditions stored in the reaction system
+    - fetching the computed moles variable y
+    - computing conversion
+    """
+
+    target_index = search_index(target)
+
+    #reset reaction system variables:
+    reactionSystem.initializeModel(\
+        reactionModel.core.species, reactionModel.core.reactions,\
+        reactionModel.edge.species, reactionModel.edge.reactions, \
+        [], atol, rtol)
+
+    #get the initial moles:
+    y0 = reactionSystem.y.copy()
+
+    #run the simulation:
+    simulate_one(outputDirectory, reactionModel, atol, rtol, reactionSystem_index, reactionSystem)
+
+    #compute conversion:
+    conv = 1 - (reactionSystem.y[target_index] / y0[target_index])
+    return conv
