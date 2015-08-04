@@ -57,7 +57,7 @@ class ReductionReaction(object):
 
 class ReductionDriver(object):
     """docstring for ReductionDriver"""
-    def __init__(self, core_species, working_dir, tolerance, number_of_time_steps=None):
+    def __init__(self, core_species, working_dir, tolerance):
         super(ReductionDriver, self).__init__()
 
         """
@@ -85,20 +85,6 @@ class ReductionDriver(object):
         """
 
         self.tolerance = tolerance
-
-
-        """
-
-        Number of time steps between start and end time of the batch reactor simulation at which the importance of 
-        reactions should be evaluated.
-
-
-
-        The more timesteps, the less chance we have to remove an important reactions, but the more simulations
-        need to be carried out.
-        """
-        if number_of_time_steps is not None:
-            self.number_of_time_steps = number_of_time_steps
 
 
 def read_simulation_profile(filepath):
@@ -176,18 +162,16 @@ def simulate_all(rmg):
         
 
 
-def initialize(core_species, working_dir, tol, number_of_time_steps):
+def initialize(core_species, working_dir, tol):
     """
     Create a global reduction driver variable that will share its state
-    with functions that need species concentrations, process conditions.
-
-    Takes a reactionModel and a reactionSystem object as an argument.
+    with functions that need globally accessible variables.
 
     """
     global reduction
     assert os.path.isdir(working_dir)
-    reduction = ReductionDriver(core_species, working_dir, tol, number_of_time_steps=number_of_time_steps)
-
+    reduction = ReductionDriver(core_species, working_dir, tol)
+    
 
 def find_unimportant_reactions(reactions, rmg):
     """
@@ -204,7 +188,6 @@ def find_unimportant_reactions(reactions, rmg):
     Returns:
         a list of reactions that can be removed.
     """
-    # print 'the number of timesteps stored in the ReductionDriver: ', reduction.number_of_time_steps
 
     # run the simulation, creating csv concentration profiles for each reaction system defined in input.
     simulate_all(rmg)
@@ -260,8 +243,21 @@ def assess_reaction(rxn, reactionSystems, reactions, tolerance):
         
 
         # take N evenly spaced indices from the table with simulation results:
-        assert reduction.number_of_time_steps < len(profile)
-        indices = np.linspace(0, len(profile)-1, num = reduction.number_of_time_steps)
+
+        """
+
+        Number of time steps between start and end time of the batch reactor simulation at which the importance of 
+        reactions should be evaluated.
+
+
+
+        The more timesteps, the less chance we have to remove an important reactions, but the more simulations
+        need to be carried out.
+        """
+        
+        timesteps = len(profile) / 4
+        assert timesteps < len(profile)
+        indices = np.linspace(0, len(profile)-1, num = timesteps)
         # samples = [profile[index][0] for index in indices]
         # print 'Time samples: ', samples
 
