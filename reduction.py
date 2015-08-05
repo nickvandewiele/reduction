@@ -4,6 +4,7 @@ import os.path
 import csv
 import numpy as np
 from math import ceil
+import logging
 
 from rmgpy.chemkin import loadChemkinFile
 from rmgpy.rmg.main import RMG
@@ -211,7 +212,7 @@ def assess_reaction_closure(reactionSystems, reactions, tolerance):
     """
     def myfilter(rxn_j):
         isImportant = assess_reaction(rxn_j, reactionSystems, reactions, tolerance)
-        print "Is rxn {} important? {} ".format(rxn_j, isImportant)
+        logging.debug("Is rxn {} important? {} ".format(rxn_j, isImportant))
         return isImportant
     
     return myfilter
@@ -253,6 +254,8 @@ def assess_reaction(rxn, reactionSystems, reactions, tolerance):
         """
         
         timesteps = len(profile) / 4
+        logging.debug('Evaluating the importance of a reaction at {} time samples.'.format(timesteps))
+
         assert timesteps < len(profile)
         indices = np.linspace(0, len(profile)-1, num = timesteps)
         # samples = [profile[index][0] for index in indices]
@@ -518,7 +521,7 @@ def calc_Ri(spc_i,rij, reactions, reactant_or_product, T, P, coreSpeciesConcentr
         return max(abs(Rf),abs(Rb))
 
 def print_info(rxn, spc, important):
-    print 'Is reaction {0} important for species {1}: {2}'.format(rxn, spc, important)
+    logging.info('Is reaction {0} important for species {1}: {2}'.format(rxn, spc, important))
  
 
 def loadRMGPyJob(inputFile, chemkinFile, speciesDict=None):
