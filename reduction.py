@@ -113,7 +113,9 @@ def simulate_one(outputDirectory, reactionModel, atol, rtol, index, reactionSyst
 
 
     """
-    csvfile = file(os.path.join(outputDirectory, 'simulation_{0}.csv'.format(index)),'w')
+    path = os.path.join(outputDirectory, 'simulation_{0}.csv'.format(index))
+    csvfile = file(path,'w')
+    logging.info('Mole fractions for reaction system {} being written to {}.'.format(index, path))
     worksheet = csv.writer(csvfile)
 
     pdepNetworks = []
