@@ -4,6 +4,7 @@ import os.path
 import csv
 import numpy as np
 from math import ceil
+from scipy.optimize import minimize
 import logging
 
 from rmgpy.chemkin import loadChemkinFile
@@ -631,4 +632,82 @@ def compute_conversion(target, outputDirectory, reactionModel, reactionSystem, r
     conv = 1 - (reactionSystem.y[target_index] / y0[target_index])
     return conv
 
+def reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index):
+    """
+    Reduces the model for the given tolerance and evaluates the 
+    target conversion.
+    """
 
+    # reduce model with the tolerance specified earlier:
+    reactions_to_be_removed = find_unimportant_reactions(reactionModel.core.reactions, rmg, tolerance)
+
+    original_size = len(reactionModel.core.reactions)
+    logging.info('Initial model size: {}'.format(original_size))
+
+    no_unimportant_rxns = len(reactions_to_be_removed)
+    logging.info('Number of unimportant reactions: {}'.format(no_unimportant_rxns))
+
+    # remove reactions from core:
+    original_reactions = reactionModel.core.reactions
+    remove_reactions_from_model(rmg, reactions_to_be_removed)
+
+    #re-compute conversion: 
+    conversion = compute_conversion(target, rmg.outputDirectory, rmg.reactionModel,\
+     rmg.reactionSystems[reaction_system_index], reaction_system_index,\
+     rmg.absoluteTolerance, rmg.relativeTolerance)
+
+    #reset the reaction model to its original state:
+    rmg.reactionModel.core.reactions = original_reactions
+
+    logging.info('Conversion of reduced model ({} rxns): {:.2f}%'.format(original_size - no_unimportant_rxns, conversion * 100))
+    return conversion
+
+def objective(tolerance, target, reactionModel, rmg, reaction_system_index, allowed_error, Xorig):
+    """
+    Objective function to be minimized as a function of the reduction tolerance
+    with x the reduction tolerance.
+
+    The reduction tolerance is used to compute a reduced model. For the reduced model, 
+    the conversion of the target parameter is computed and compared to the conversion
+    of the original Xorig, non-reduced model.
+
+    The deviation between the conversions of the original and reduced model is computed:
+    dev = (Xred - Xorig) / Xorig
+
+    The function f to be minimized is taken as:
+    f = dev^2 - allowed_error^2
+
+    0 < x < 1
+    
+    """
+    tolerance = tolerance[0]
+    Xred = reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index)
+    
+    dev = (Xred - Xorig) / Xorig
+    logging.info('Deviation between original and reduced conversion: {:.2f}%'.format(dev * 100))
+
+    scale = 1e3 #rescale your objective function so that the differences and derivatives are larger
+    f = (dev * dev - allowed_error * allowed_error) * scale
+
+    logging.info('Objective function value: {:.2f}'.format(f))
+
+    # derror = dconv(x)
+    # df = 2 * dev * derror
+    return f
+
+def callback_x(x):
+    logging.info('Current parameter vector: {}'.format(x))
+
+def optimize_tolerance(target, reactionModel, rmg, reaction_system_index, error, orig_conv):
+    """
+    Unconstrained minimization with bounds on the variable x.
+    """
+    x0 = 1e-3#initial guess
+    logging.info('Initial guess for the reduction tolerance: {}'.format(x0))
+
+    res = minimize(objective, np.array([x0]),\
+     args=(target, reactionModel, rmg, reaction_system_index, error, orig_conv),\
+     bounds=[(0,1)], tol=1e-8, options={'disp': True},callback = callback_x)#method='nelder-mead',\
+     
+    logging.info(res)
+    return res.x
