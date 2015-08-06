@@ -259,7 +259,7 @@ def assess_reaction(rxn, reactionSystems, reactions, tolerance):
         timesteps = len(profile) / 4
         logging.debug('Evaluating the importance of a reaction at {} time samples.'.format(timesteps))
 
-        assert timesteps < len(profile)
+        assert timesteps <= len(profile)
         indices = np.linspace(0, len(profile)-1, num = timesteps)
         # samples = [profile[index][0] for index in indices]
         # print 'Time samples: ', samples
