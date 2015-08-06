@@ -90,20 +90,29 @@ def read_simulation_profile(filepath):
 
     First row of table are the headers.
 
+    A list is returned with each row a tuple (time, dict).
+
+    The dict contains species name, concentration pairs.
+
     """
 
 
     with open(filepath, 'rb') as f:
         profile = list(csv.reader(f))
 
-    raw = profile[1:]
-
     #massage data somewhat:
-    processed = []
-    for row in raw:
-        processed.append(map(float,row))
 
-    return np.array(processed)
+    species_labels = profile[0][2:]#skip time, volume
+    species_labels = [label.split('(')[0] for label in species_labels]#cut off everything after 1st (
+
+    data = []
+    for row in profile[1:]:
+        time = row[0]
+        concs = row[2:]#skip time, volume
+        dict_concs = {key: float(value) for (key, value) in zip(species_labels, concs)}
+        data.append((time, dict_concs))
+
+    return data
 
 def simulate_one(outputDirectory, reactionModel, atol, rtol, index, reactionSystem):
     """
@@ -260,17 +269,10 @@ def assess_reaction(rxn, reactionSystems, reactions, tolerance):
         logging.debug('Evaluating the importance of a reaction at {} time samples.'.format(timesteps))
 
         assert timesteps <= len(profile)
-        indices = np.linspace(0, len(profile)-1, num = timesteps)
-        # samples = [profile[index][0] for index in indices]
-        # print 'Time samples: ', samples
-
+        indices = map(int, np.linspace(0, len(profile)-1, num = timesteps))
         for index in indices:
             assert profile[index] is not None
-
-            timepoint = profile[index][0]# first column
-            # print 'Timepoint: ', timepoint
-            coreSpeciesConcentrations = profile[index][2:]# 3rd to last column
-            # print coreSpeciesConcentrations
+            timepoint, coreSpeciesConcentrations = profile[index]
             
             # print 'Species concentrations at {}: {}'.format(timepoint, reactionSystem.coreSpeciesConcentrations)
             for species_i in rxn.reactants:
@@ -428,9 +430,7 @@ def getConcentration(spc, coreSpeciesConcentrations):
     Returns the concentration of the species in the 
     reaction system.
     """
-
-    spc_index = search_index(spc)
-    return coreSpeciesConcentrations[spc_index]
+    return coreSpeciesConcentrations[spc.label]
 
 def calc_rij(rxn_j, spc_i, reactant_or_product, T, P, coreSpeciesConcentrations):
     """
