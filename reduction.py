@@ -417,17 +417,11 @@ def compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrat
 
 
 def search_index(spc):
+    """
+    Search for the index of the species in the list of core species
+    """
     assert isinstance(spc, Species)
-
-    spc_index = -1
-
-    for index, spc_core in enumerate(reduction.core_species):
-        if spc is spc_core:#TODO reference comparison!
-            spc_index = index
-            break
-
-    assert spc_index != -1
-    return spc_index
+    return reduction.core_species.index(spc)
 
 def getConcentration(spc, coreSpeciesConcentrations):
     """
