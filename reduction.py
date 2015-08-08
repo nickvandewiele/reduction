@@ -7,7 +7,7 @@ from math import ceil
 from scipy.optimize import minimize
 import logging
 
-from rmgpy.chemkin import loadChemkinFile
+from rmgpy.chemkin import getSpeciesIdentifier, loadChemkinFile
 from rmgpy.rmg.main import RMG
 from rmgpy.solver.base import TerminationTime, TerminationConversion
 from rmgpy.species import Species
@@ -75,57 +75,35 @@ class ReductionDriver(object):
         self.working_dir = working_dir
 
 
-def read_simulation_profile(filepath):
+def simulate_one(outputDirectory, reactionModel, atol, rtol, reactionSystem):
     """
 
-    Reads in a csv file, located in the working directory under the name
-    'simulation_1.csv'.
+    Simulates one reaction system, listener registers results, 
+    which are returned at the end.
 
-    This file contains the intermediate state variables
-    (time, volume, core species concentrations) of the reactor simulation.
 
-    Returns a table, with each row the core species concentrations
-    (3rd to last columns) at the specified time (1st column). The
-    computed volume is reported in column 2.
+    The returned data consists of a array of the species names, 
+    and the concentration data.
 
-    First row of table are the headers.
+    The concentration data consists of a number of elements for each timestep 
+    the solver took to reach the end time of the batch reactor simulation.
 
-    A list is returned with each row a tuple (time, dict).
-
-    The dict contains species name, concentration pairs.
+    Each element consists of the time and the concentration data of the species at that 
+    particular timestep in the order of the species names.
 
     """
 
+    #register as a listener
+    listener = ConcentrationListener()
 
-    with open(filepath, 'rb') as f:
-        profile = list(csv.reader(f))
+    coreSpecies = reactionModel.core.species
+    species_names = []
+    for spc in coreSpecies:
+        species_names.append(getSpeciesIdentifier(spc).split('(')[0])
 
-    #massage data somewhat:
+    listener.species_names = species_names
 
-    species_labels = profile[0][2:]#skip time, volume
-    species_labels = [label.split('(')[0] for label in species_labels]#cut off everything after 1st (
-
-    data = []
-    for row in profile[1:]:
-        time = row[0]
-        concs = row[2:]#skip time, volume
-        dict_concs = {key: float(value) for (key, value) in zip(species_labels, concs)}
-        data.append((time, dict_concs))
-
-    return data
-
-def simulate_one(outputDirectory, reactionModel, atol, rtol, index, reactionSystem):
-    """
-
-    Simulates one reaction system, writes the results
-    to a csv file 'simulation_X' with X the index.
-
-
-    """
-    path = os.path.join(outputDirectory, 'simulation_{0}.csv'.format(index))
-    csvfile = file(path,'w')
-    logging.info('Mole fractions for reaction system {} being written to {}.'.format(index, path))
-    worksheet = csv.writer(csvfile)
+    reactionSystem.attach(listener)
 
     pdepNetworks = []
     for source, networks in reactionModel.networkDict.items():
@@ -140,24 +118,34 @@ def simulate_one(outputDirectory, reactionModel, atol, rtol, index, reactionSyst
         toleranceMoveToCore = 1,
         toleranceInterruptSimulation = 1,
         pdepNetworks = pdepNetworks,
-        worksheet = worksheet,
         absoluteTolerance = atol,
         relativeTolerance = rtol,
     ) 
 
     assert terminated
 
+    #unregister as a listener
+    reactionSystem.detach(listener) 
+
+    return listener.species_names, listener.data
+
 def simulate_all(rmg):
     """
     Simulate the RMG job, generating an output csv file
     for each of the simulated reaction systems.
+
+    Each element i of the data corresponds to a reaction system.
     """
     
     reactionModel = rmg.reactionModel
-    assert rmg.saveSimulationProfiles
+
+    data = []
+
     atol, rtol = rmg.absoluteTolerance, rmg.relativeTolerance
-    for index, reactionSystem in enumerate(rmg.reactionSystems):
-        simulate_one(rmg.outputDirectory, reactionModel, atol, rtol, index, reactionSystem)
+    for _, reactionSystem in enumerate(rmg.reactionSystems):
+        data.append(simulate_one(rmg.outputDirectory, reactionModel, atol, rtol, reactionSystem))
+
+    return data
         
 
 
@@ -189,7 +177,7 @@ def find_unimportant_reactions(reactions, rmg, tolerance):
     """
 
     # run the simulation, creating csv concentration profiles for each reaction system defined in input.
-    simulate_all(rmg)
+    data = simulate_all(rmg)
 
     # start the model reduction
     reduce_reactions = [ReductionReaction(rxn) for rxn in reactions]
@@ -205,7 +193,7 @@ def find_unimportant_reactions(reactions, rmg, tolerance):
     A low tolerance means that few reactions will be deemed unimportant, and the reduced model will only differ from the full
     model by a few reactions.
     """
-    closure = assess_reaction_closure(rmg.reactionSystems, reduce_reactions, tolerance)
+    closure = assess_reaction_closure(rmg.reactionSystems, reduce_reactions, tolerance, data)
     reactions_to_be_removed = list(itertools.ifilterfalse(closure, reduce_reactions))
 
     # reactions_to_be_removed = []
@@ -217,19 +205,19 @@ def find_unimportant_reactions(reactions, rmg, tolerance):
     return [rxn.rmg_reaction for rxn in reactions_to_be_removed]
 
 
-def assess_reaction_closure(reactionSystems, reactions, tolerance):
+def assess_reaction_closure(reactionSystems, reactions, tolerance, data):
     """
     Closure to be able to pass in the profile, reactions, and indices objects to the 
     assess_reaction function.
     """
     def myfilter(rxn_j):
-        isImportant = assess_reaction(rxn_j, reactionSystems, reactions, tolerance)
+        isImportant = assess_reaction(rxn_j, reactionSystems, reactions, tolerance, data)
         logging.debug("Is rxn {} important? {} ".format(rxn_j, isImportant))
         return isImportant
     
     return myfilter
 
-def assess_reaction(rxn, reactionSystems, reactions, tolerance):
+def assess_reaction(rxn, reactionSystems, reactions, tolerance, data):
     """
     Returns whether the reaction is important or not in the reactions.
 
@@ -244,13 +232,11 @@ def assess_reaction(rxn, reactionSystems, reactions, tolerance):
     wd = reduction.working_dir
 
     # read in the intermediate state variables
-    for system_index, reactionSystem in enumerate(reactionSystems):
+    for datum, reactionSystem in zip(data, reactionSystems):
 
-        path = os.path.join(wd, 'simulation_{0}.csv'.format(system_index))
-        assert os.path.isfile(path)
-        profile = read_simulation_profile(path)
         T, P = reactionSystem.T.value_si, reactionSystem.P.value_si
         
+        species_names, profile = datum
 
         # take N evenly spaced indices from the table with simulation results:
 
@@ -273,6 +259,8 @@ def assess_reaction(rxn, reactionSystems, reactions, tolerance):
         for index in indices:
             assert profile[index] is not None
             timepoint, coreSpeciesConcentrations = profile[index]
+
+            coreSpeciesConcentrations = {key: float(value) for (key, value) in zip(species_names, coreSpeciesConcentrations)}
             
             # print 'Species concentrations at {}: {}'.format(timepoint, reactionSystem.coreSpeciesConcentrations)
             for species_i in rxn.reactants:
@@ -707,3 +695,13 @@ def optimize_tolerance(target, reactionModel, rmg, reaction_system_index, error,
      
     logging.info(res)
     return res.x
+
+class ConcentrationListener(object):
+    """Returns the species concentration profiles at each time step."""
+
+    def __init__(self):
+        self.species_names = []
+        self.data = []
+
+    def update(self, subject):
+        self.data.append((subject.t , subject.coreSpeciesConcentrations))
