@@ -344,12 +344,12 @@ def get_stoichiometric_coefficient(rxn_j, spc_i, reactant_or_product):
     if reactant_or_product == 'reactant':
         stoich = 0
         for reactant in rxn_j.reactants:
-            if reactant is spc_i: stoich -= 1
+            if reactant.label == spc_i.label: stoich -= 1
         return stoich
     elif reactant_or_product == 'product':
         stoich = 0
         for product in rxn_j.products:
-            if product is spc_i: stoich += 1
+            if product.label == spc_i.label: stoich += 1
         return stoich
 
     raise Exception('The species was not found in the reaction! Something went wrong!')   
@@ -454,7 +454,8 @@ def calc_Rf(spc_i, reactions, reactant_or_product, T, P, coreSpeciesConcentratio
 
     for reaction in reactions:
         molecules = reaction.products if formation_or_consumption == 'formation:' else reaction.reactants
-        if spc_i in molecules:
+        labels = [mol.label for mol in molecules]
+        if spc_i.label in labels:
             rij = calc_rij(reaction, spc_i,  reactant_or_product, T, P, coreSpeciesConcentrations)
             rate = rate + rij
         else:
