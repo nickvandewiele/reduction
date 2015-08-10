@@ -44,6 +44,13 @@ class ReductionReaction(object):
     def __str__(self):
         return str(self.rmg_reaction)
 
+    def __reduce__(self):
+        """
+        A helper function used when pickling an object.
+        """
+        return (self.__class__, (self.rmg_reaction, ))
+
+
     def getRateCoefficient(self, T,P):
         if self.kf is None:
             self.kf = self.rmg_reaction.getRateCoefficient(T,P)
