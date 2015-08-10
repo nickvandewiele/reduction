@@ -10,8 +10,13 @@ from scipy.optimize import minimize
 import re
 import random
 from collections import Counter
+import logging
 
 #local imports
+
+global useSCOOP
+useSCOOP = False
+
 try:
     from scoop import shared
     from scoop.futures import map as map_
@@ -24,10 +29,9 @@ except ImportError:
 from rmgpy.chemkin import getSpeciesIdentifier, loadChemkinFile
 from rmgpy.rmg.main import RMG
 from rmgpy.solver.base import TerminationTime, TerminationConversion
-from rmgpy.species import Species
 
 """
-Guidelines for the chemkin input files:
+Guidelines for input:
 
 - Do not use the annotated chemkin file as input!
 - 
@@ -160,11 +164,11 @@ def initialize(wd):
     assert os.path.isdir(working_dir)
     
 
-def find_unimportant_reactions(reactions, rmg, tolerance):
+def find_unimportant_reactions(rxns, rmg, tolerance):
     """
     This function:
 
-    - loops over all reactions
+    - loops over all rxns
     - loops over all the species involved in a specific reaction
     - decides whether the specific reaction is important for the species.
 
@@ -173,18 +177,27 @@ def find_unimportant_reactions(reactions, rmg, tolerance):
 
 
     Returns:
-        a list of reactions that can be removed.
+        a list of rxns that can be removed.
     """
 
     # run the simulation, creating csv concentration profiles for each reaction system defined in input.
-    data = simulate_all(rmg)
-    shared.setConst(data = data)
+    simdata = simulate_all(rmg)
+    if useSCOOP:
+        shared.setConst(data = simdata)
+    else:
+        global data
+        data = simdata
     # logging.info('Sharing data: {}'.format(data))
 
 
     # start the model reduction
-    reduce_reactions = [ReductionReaction(rxn) for rxn in reactions]
-    shared.setConst(reactions = reduce_reactions)
+    reduce_reactions = [ReductionReaction(rxn) for rxn in rxns]
+    if useSCOOP:
+        shared.setConst(reactions = reduce_reactions)
+    else:
+        global reactions
+        reactions = reduce_reactions
+    
 
     """
     Tolerance to decide whether a reaction is unimportant for the formation/destruction of a species
@@ -227,8 +240,12 @@ def assess_reaction(rxn, reactionSystems, tolerance):
 
     """
     logging.info('Assessing reaction {}'.format(rxn))
-    reactions = shared.getConst('reactions')
-    data = shared.getConst('data')
+    if useSCOOP:
+        reactions = shared.getConst('reactions')
+        data = shared.getConst('data')
+    else:
+        global data, reactions
+
 
     # read in the intermediate state variables
     for datum, reactionSystem in zip(data, reactionSystems):    
