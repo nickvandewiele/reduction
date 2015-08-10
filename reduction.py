@@ -1,3 +1,5 @@
+
+#global imports
 import itertools
 import copy
 import os.path
@@ -6,16 +8,22 @@ import numpy as np
 from math import ceil
 from scipy.optimize import minimize
 import re
-#local imports
-from scoop import futures, shared
-from scoop import logger as logging
+import random
 
+#local imports
+try:
+    from scoop import shared
+    from scoop.futures import map as map_
+    from scoop import logger as logging
+except ImportError:
+    logging.error('Import Error!')
+    map_ = map
+    import logging
 
 from rmgpy.chemkin import getSpeciesIdentifier, loadChemkinFile
 from rmgpy.rmg.main import RMG
 from rmgpy.solver.base import TerminationTime, TerminationConversion
 from rmgpy.species import Species
-
 
 """
 Guidelines for the chemkin input files:
@@ -190,8 +198,7 @@ def find_unimportant_reactions(reactions, rmg, tolerance):
     """
 
     N = len(reduce_reactions)
-    # boolean_array = list(map_(assess_reaction, reduce_reactions, [rmg.reactionSystems] * N, [tolerance] * N))
-    boolean_array = list(futures.map(assess_reaction, reduce_reactions, [rmg.reactionSystems] * N, [tolerance] * N))
+    boolean_array = list(map_(assess_reaction, reduce_reactions, [rmg.reactionSystems] * N, [tolerance] * N))
 
     reactions_to_be_removed = []
     for isImport, rxn in zip(boolean_array, reduce_reactions):
@@ -203,7 +210,10 @@ def find_unimportant_reactions(reactions, rmg, tolerance):
     
     return myfilter
 
-def assess_reaction(rxn, reactionSystems, reactions, tolerance, data):
+def mock_assess_reaction(rxn, reactionSystems, tolerance):
+    return bool(random.getrandbits(1))
+
+def assess_reaction(rxn, reactionSystems, tolerance):
     """
     Returns whether the reaction is important or not in the reactions.
 
@@ -215,7 +225,7 @@ def assess_reaction(rxn, reactionSystems, reactions, tolerance, data):
 
 
     """
-    logging.info('Assing reaction {}'.format(rxn))
+    logging.info('Assessing reaction {}'.format(rxn))
     reactions = shared.getConst('reactions')
     data = shared.getConst('data')
 
