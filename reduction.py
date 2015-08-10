@@ -56,6 +56,8 @@ class ReductionReaction(object):
         self.products = rmg_reaction.products
         self.kf = None
         self.kb = None
+        self.stoichio = {}
+        self.create_stoichio()
     
     def __str__(self):
         return str(self.rmg_reaction)
@@ -80,6 +82,16 @@ class ReductionReaction(object):
             return self.kb
         else: return self.kb
     
+    def create_stoichio(self):
+        c_reactants = Counter([mol.label for mol in self.reactants])
+        self.stoichio['reactant'] = c_reactants
+
+        c_products = Counter([mol.label for mol in self.products])
+        self.stoichio['product'] = c_products
+
+    def get_stoichiometric_coefficient(self, spc_i, reactant_or_product):       
+        return self.stoichio[reactant_or_product][spc_i.label]
+
 
 def simulate_one(reactionModel, atol, rtol, reactionSystem):
     """
@@ -354,17 +366,6 @@ def isImportant(rxn, species_i, reactions, reactant_or_product, tolerance, T, P,
         return False
     
 
-def get_stoichiometric_coefficient(rxn_j, spc_i, reactant_or_product):
-    """
-    ...
-    """
-    
-    
-    molecules = rxn_j.reactants if reactant_or_product == 'reactant' else rxn_j.products
-    c = Counter([mol.label for mol in molecules])
-    return c[spc_i.label]
-
-
 def compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrations): 
     """
 
@@ -395,7 +396,7 @@ def compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrat
     concentrations = []
     for spc_i in species_list:
         ci = getConcentration(spc_i, coreSpeciesConcentrations)
-        nu_i = get_stoichiometric_coefficient(rxn_j, spc_i, reactant_or_product)
+        nu_i = rxn_j.get_stoichiometric_coefficient(spc_i, reactant_or_product)
         concentrations.append(ci**nu_i)
 
     
@@ -433,7 +434,7 @@ def calc_rij(rxn_j, spc_i, reactant_or_product, T, P, coreSpeciesConcentrations)
     Units: mol / m^3 s
     """
    
-    nu_i = get_stoichiometric_coefficient(rxn_j, spc_i, reactant_or_product)
+    nu_i = rxn_j.get_stoichiometric_coefficient(spc_i, reactant_or_product)
     sign = -1 if reactant_or_product == 'reactant' else 1
 
     forward_or_reverse = 'forward' if reactant_or_product == 'reactant' else 'reverse'
