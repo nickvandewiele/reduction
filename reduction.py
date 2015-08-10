@@ -383,14 +383,14 @@ def compute_reaction_rate(rxn_j, forward, T, P, coreSpeciesConcentrations):
 
     k = rxn_j.getRateCoefficient(T,P) if forward else rxn_j.getReverseRateCoefficient(T,P)
     species_list = rxn_j.reactants if forward else rxn_j.products
-    reactant_or_product = 'reactant' if forward else 'product'
+    isReactant = forward
 
     assert species_list is not None
 
     concentrations = []
     for spc_i in species_list:
         ci = getConcentration(spc_i, coreSpeciesConcentrations)
-        nu_i = rxn_j.get_stoichiometric_coefficient(spc_i, reactant_or_product)
+        nu_i = rxn_j.get_stoichiometric_coefficient(spc_i, isReactant)
         concentrations.append(ci**nu_i)
 
     
@@ -414,7 +414,7 @@ def getConcentration(spc, coreSpeciesConcentrations):
     """
     return coreSpeciesConcentrations[spc.label]
 
-def calc_rij(rxn_j, spc_i, reactant_or_product, T, P, coreSpeciesConcentrations):
+def calc_rij(rxn_j, spc_i, isReactant, T, P, coreSpeciesConcentrations):
     """
     This function computes the rate of formation of species i
     through the reaction j.
@@ -428,10 +428,10 @@ def calc_rij(rxn_j, spc_i, reactant_or_product, T, P, coreSpeciesConcentrations)
     Units: mol / m^3 s
     """
    
-    nu_i = rxn_j.get_stoichiometric_coefficient(spc_i, reactant_or_product)
-    sign = -1 if reactant_or_product == 'reactant' else 1
+    nu_i = rxn_j.get_stoichiometric_coefficient(spc_i, isReactant)
+    sign = -1 if isReactant else 1
 
-    forward = reactant_or_product == 'reactant'
+    forward = isReactant
 
     r_j = compute_reaction_rate(rxn_j, forward, T, P, coreSpeciesConcentrations)
 
