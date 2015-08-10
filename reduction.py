@@ -366,7 +366,7 @@ def isImportant(rxn, species_i, reactions, reactant_or_product, tolerance, T, P,
         return False
     
 
-def compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrations): 
+def compute_reaction_rate(rxn_j, forward, T, P, coreSpeciesConcentrations): 
     """
 
     Computes reaction rate r as follows:
@@ -381,15 +381,9 @@ def compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrat
     ...
     """
 
-    if forward_or_reverse == 'forward':
-        k = rxn_j.getRateCoefficient(T,P)
-        species_list = rxn_j.reactants
-        reactant_or_product = 'reactant'
-    elif forward_or_reverse == 'reverse':
-        kb = rxn_j.getReverseRateCoefficient(T,P)
-        k = kb
-        species_list = rxn_j.products
-        reactant_or_product = 'product'
+    k = rxn_j.getRateCoefficient(T,P) if forward else rxn_j.getReverseRateCoefficient(T,P)
+    species_list = rxn_j.reactants if forward else rxn_j.products
+    reactant_or_product = 'reactant' if forward else 'product'
 
     assert species_list is not None
 
@@ -437,9 +431,9 @@ def calc_rij(rxn_j, spc_i, reactant_or_product, T, P, coreSpeciesConcentrations)
     nu_i = rxn_j.get_stoichiometric_coefficient(spc_i, reactant_or_product)
     sign = -1 if reactant_or_product == 'reactant' else 1
 
-    forward_or_reverse = 'forward' if reactant_or_product == 'reactant' else 'reverse'
+    forward = reactant_or_product == 'reactant'
 
-    r_j = compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrations)
+    r_j = compute_reaction_rate(rxn_j, forward, T, P, coreSpeciesConcentrations)
 
     rij = nu_i * sign * r_j
     return rij
