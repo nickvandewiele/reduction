@@ -6,6 +6,7 @@ import numpy as np
 from math import ceil
 from scipy.optimize import minimize
 import logging
+import re
 
 from rmgpy.chemkin import getSpeciesIdentifier, loadChemkinFile
 from rmgpy.rmg.main import RMG
@@ -57,25 +58,7 @@ class ReductionReaction(object):
         else: return self.kb
     
 
-class ReductionDriver(object):
-    """docstring for ReductionDriver"""
-    def __init__(self, core_species, working_dir):
-        super(ReductionDriver, self).__init__()
-
-        """
-        A list with species objects.
-        """
-        self.core_species = core_species
-
-
-        """
-        Working dir is the directory in which we look for the csv file with the simulation profiles.
-
-        """
-        self.working_dir = working_dir
-
-
-def simulate_one(outputDirectory, reactionModel, atol, rtol, reactionSystem):
+def simulate_one(reactionModel, atol, rtol, reactionSystem):
     """
 
     Simulates one reaction system, listener registers results, 
@@ -97,9 +80,12 @@ def simulate_one(outputDirectory, reactionModel, atol, rtol, reactionSystem):
     listener = ConcentrationListener()
 
     coreSpecies = reactionModel.core.species
+    regex = r'\([0-9]+\)'#cut of '(one or more digits)'
     species_names = []
     for spc in coreSpecies:
-        species_names.append(getSpeciesIdentifier(spc).split('(')[0])
+        name = getSpeciesIdentifier(spc)
+        name_cutoff = re.split(regex, name)[0]
+        species_names.append(name_cutoff)
 
     listener.species_names = species_names
 
@@ -143,21 +129,16 @@ def simulate_all(rmg):
 
     atol, rtol = rmg.absoluteTolerance, rmg.relativeTolerance
     for _, reactionSystem in enumerate(rmg.reactionSystems):
-        data.append(simulate_one(rmg.outputDirectory, reactionModel, atol, rtol, reactionSystem))
+        data.append(simulate_one(reactionModel, atol, rtol, reactionSystem))
 
     return data
         
 
 
-def initialize(core_species, working_dir):
-    """
-    Create a global reduction driver variable that will share its state
-    with functions that need globally accessible variables.
-
-    """
-    global reduction
+def initialize(wd):
+    global working_dir
+    working_dir = wd
     assert os.path.isdir(working_dir)
-    reduction = ReductionDriver(core_species, working_dir)
     
 
 def find_unimportant_reactions(reactions, rmg, tolerance):
@@ -229,7 +210,6 @@ def assess_reaction(rxn, reactionSystems, reactions, tolerance, data):
 
 
     """
-    wd = reduction.working_dir
 
     # read in the intermediate state variables
     for datum, reactionSystem in zip(data, reactionSystems):
@@ -406,13 +386,6 @@ def compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrat
     return r
 
 
-def search_index(spc):
-    """
-    Search for the index of the species in the list of core species
-    """
-    assert isinstance(spc, Species)
-    return reduction.core_species.index(spc)
-
 def getConcentration(spc, coreSpeciesConcentrations):
     """
     Returns the concentration of the species in the 
@@ -585,7 +558,7 @@ def saveChemkinFile(path, species, reactions, verbose = True):
     with open(path, 'w') as f:
         f.write(s)
 
-def compute_conversion(target, outputDirectory, reactionModel, reactionSystem, reactionSystem_index, atol, rtol):
+def compute_conversion(target, reactionModel, reactionSystem, reactionSystem_index, atol, rtol):
     """
     Computes the conversion of a target molecule by
 
@@ -598,7 +571,7 @@ def compute_conversion(target, outputDirectory, reactionModel, reactionSystem, r
     - computing conversion
     """
 
-    target_index = search_index(target)
+    target_index = reactionModel.core.species.index(target)
 
     #reset reaction system variables:
     reactionSystem.initializeModel(\
@@ -610,7 +583,7 @@ def compute_conversion(target, outputDirectory, reactionModel, reactionSystem, r
     y0 = reactionSystem.y.copy()
 
     #run the simulation:
-    simulate_one(outputDirectory, reactionModel, atol, rtol, reactionSystem_index, reactionSystem)
+    simulate_one(reactionModel, atol, rtol, reactionSystem)
 
     #compute conversion:
     conv = 1 - (reactionSystem.y[target_index] / y0[target_index])
@@ -636,7 +609,7 @@ def reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index)
     remove_reactions_from_model(rmg, reactions_to_be_removed)
 
     #re-compute conversion: 
-    conversion = compute_conversion(target, rmg.outputDirectory, rmg.reactionModel,\
+    conversion = compute_conversion(target, rmg.reactionModel,\
      rmg.reactionSystems[reaction_system_index], reaction_system_index,\
      rmg.absoluteTolerance, rmg.relativeTolerance)
 
