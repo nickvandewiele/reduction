@@ -5,8 +5,11 @@ import csv
 import numpy as np
 from math import ceil
 from scipy.optimize import minimize
-import logging
 import re
+#local imports
+from scoop import futures, shared
+from scoop import logger as logging
+
 
 from rmgpy.chemkin import getSpeciesIdentifier, loadChemkinFile
 from rmgpy.rmg.main import RMG
@@ -166,9 +169,13 @@ def find_unimportant_reactions(reactions, rmg, tolerance):
 
     # run the simulation, creating csv concentration profiles for each reaction system defined in input.
     data = simulate_all(rmg)
+    shared.setConst(data = data)
+    # logging.info('Sharing data: {}'.format(data))
+
 
     # start the model reduction
     reduce_reactions = [ReductionReaction(rxn) for rxn in reactions]
+    shared.setConst(reactions = reduce_reactions)
 
     """
     Tolerance to decide whether a reaction is unimportant for the formation/destruction of a species
@@ -181,27 +188,18 @@ def find_unimportant_reactions(reactions, rmg, tolerance):
     A low tolerance means that few reactions will be deemed unimportant, and the reduced model will only differ from the full
     model by a few reactions.
     """
-    closure = assess_reaction_closure(rmg.reactionSystems, reduce_reactions, tolerance, data)
-    reactions_to_be_removed = list(itertools.ifilterfalse(closure, reduce_reactions))
 
-    # reactions_to_be_removed = []
-    # for rxn_j in model:
-    #     isImportant = assess_reaction(rxn_j, profile, model, indices)
-    #     if not isImportant: reactions_to_be_removed.append(rxn_j)
+    N = len(reduce_reactions)
+    # boolean_array = list(map_(assess_reaction, reduce_reactions, [rmg.reactionSystems] * N, [tolerance] * N))
+    boolean_array = list(futures.map(assess_reaction, reduce_reactions, [rmg.reactionSystems] * N, [tolerance] * N))
+
+    reactions_to_be_removed = []
+    for isImport, rxn in zip(boolean_array, reduce_reactions):
+        if not isImport:
+            reactions_to_be_removed.append(rxn)
 
 
     return [rxn.rmg_reaction for rxn in reactions_to_be_removed]
-
-
-def assess_reaction_closure(reactionSystems, reactions, tolerance, data):
-    """
-    Closure to be able to pass in the profile, reactions, and indices objects to the 
-    assess_reaction function.
-    """
-    def myfilter(rxn_j):
-        isImportant = assess_reaction(rxn_j, reactionSystems, reactions, tolerance, data)
-        logging.debug("Is rxn {} important? {} ".format(rxn_j, isImportant))
-        return isImportant
     
     return myfilter
 
@@ -217,10 +215,12 @@ def assess_reaction(rxn, reactionSystems, reactions, tolerance, data):
 
 
     """
+    logging.info('Assing reaction {}'.format(rxn))
+    reactions = shared.getConst('reactions')
+    data = shared.getConst('data')
 
     # read in the intermediate state variables
-    for datum, reactionSystem in zip(data, reactionSystems):
-
+    for datum, reactionSystem in zip(data, reactionSystems):    
         T, P = reactionSystem.T.value_si, reactionSystem.P.value_si
         
         species_names, profile = datum
