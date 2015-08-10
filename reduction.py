@@ -387,21 +387,17 @@ def compute_reaction_rate(rxn_j, forward, T, P, coreSpeciesConcentrations):
 
     assert species_list is not None
 
-    concentrations = []
-    for spc_i in species_list:
+    concentrations = np.empty(len(species_list), dtype=float)
+    for i,spc_i in enumerate(species_list):
         ci = getConcentration(spc_i, coreSpeciesConcentrations)
-        nu_i = rxn_j.get_stoichiometric_coefficient(spc_i, isReactant)
-        concentrations.append(ci**nu_i)
-
-    
-    product = 1
-    for conc in concentrations:
-        if np.absolute(conc) < CLOSE_TO_ZERO:
+        if np.absolute(ci) < CLOSE_TO_ZERO:
             return 0.
-        product = product * conc
-        #print 'The product of conc raised to stoich coeff is: ', product
+        nu_i = rxn_j.get_stoichiometric_coefficient(spc_i, isReactant)
+        conc = ci**nu_i
 
-    r = k * product
+        concentrations[i] = conc
+
+    r = k * concentrations.prod()
 
 
     return r
