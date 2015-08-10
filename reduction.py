@@ -9,6 +9,7 @@ from math import ceil
 from scipy.optimize import minimize
 import re
 import random
+from collections import Counter
 
 #local imports
 try:
@@ -341,18 +342,11 @@ def get_stoichiometric_coefficient(rxn_j, spc_i, reactant_or_product):
     ...
     """
     
-    if reactant_or_product == 'reactant':
-        stoich = 0
-        for reactant in rxn_j.reactants:
-            if reactant.label == spc_i.label: stoich -= 1
-        return stoich
-    elif reactant_or_product == 'product':
-        stoich = 0
-        for product in rxn_j.products:
-            if product.label == spc_i.label: stoich += 1
-        return stoich
+    
+    molecules = rxn_j.reactants if reactant_or_product == 'reactant' else rxn_j.products
+    c = Counter([mol.label for mol in molecules])
+    return c[spc_i.label]
 
-    raise Exception('The species was not found in the reaction! Something went wrong!')   
 
 def compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrations): 
     """
@@ -385,8 +379,6 @@ def compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrat
     for spc_i in species_list:
         ci = getConcentration(spc_i, coreSpeciesConcentrations)
         nu_i = get_stoichiometric_coefficient(rxn_j, spc_i, reactant_or_product)
-        nu_i = abs(nu_i)
-        #print 'The stoichiometric coefficient is: ',  nu_i
         concentrations.append(ci**nu_i)
 
     
@@ -425,15 +417,13 @@ def calc_rij(rxn_j, spc_i, reactant_or_product, T, P, coreSpeciesConcentrations)
     """
    
     nu_i = get_stoichiometric_coefficient(rxn_j, spc_i, reactant_or_product)
-    # print 'stoichio metric coeff of spc {} in rxn {}: {} '.format( spc_i, rxn_j, nu_i)
-    if reactant_or_product == 'reactant':
-        forward_or_reverse = 'forward'
-    elif reactant_or_product == 'product':
-        forward_or_reverse = 'reverse'
+    sign = -1 if reactant_or_product == 'reactant' else 1
+
+    forward_or_reverse = 'forward' if reactant_or_product == 'reactant' else 'reverse'
 
     r_j = compute_reaction_rate(rxn_j, forward_or_reverse, T, P, coreSpeciesConcentrations)
 
-    rij = nu_i * r_j
+    rij = nu_i * sign * r_j
     return rij
 
 
@@ -458,9 +448,7 @@ def calc_Rf(spc_i, reactions, reactant_or_product, T, P, coreSpeciesConcentratio
         if spc_i.label in labels:
             rij = calc_rij(reaction, spc_i,  reactant_or_product, T, P, coreSpeciesConcentrations)
             rate = rate + rij
-        else:
-            pass
-            #print 'This species is not part of this reaction. Ignoring this reaction.'
+
 
     return rate
     
