@@ -171,7 +171,7 @@ def initialize(wd, rxns):
     shared.setConst(reactions = reduce_reactions)
 
 
-def find_unimportant_reactions(rmg, tolerance):
+def find_important_reactions(rmg, tolerance):
     """
     This function:
 
@@ -206,14 +206,14 @@ def find_unimportant_reactions(rmg, tolerance):
     N = len(reduce_reactions)
     boolean_array = list(map_(WorkerWrapper(assess_reaction), reduce_reactions, [rmg.reactionSystems] * N, [tolerance] * N, [simdata] * N))
 
-    reactions_to_be_removed = []
+    important_rxns = []
     for isImport, rxn in zip(boolean_array, reduce_reactions):
         logging.debug('Is rxn {rxn} important? {isImport}'.format(**locals()))
-        if not isImport:
-            reactions_to_be_removed.append(rxn)
+        if isImport:
+            important_rxns.append(rxn)
 
 
-    return [rxn.rmg_reaction for rxn in reactions_to_be_removed]
+    return [rxn.rmg_reaction for rxn in important_rxns]
 
 def assess_reaction(rxn, reactionSystems, tolerance, data):
     """
@@ -518,18 +518,6 @@ def loadRMGPyJob(inputFile, chemkinFile, speciesDict=None):
 def write_model(rmg, chemkin_name='reduced_reactions.inp'):
     saveChemkinFile(chemkin_name, rmg.reactionModel.core.species, rmg.reactionModel.core.reactions)
 
-def remove_reactions_from_model(rmg, reaction_list):
-    """
-    Assumes reactions are in the core:
-    """
-
-    new_core_rxns = []
-    for rxn in rmg.reactionModel.core.reactions:
-        if not rxn in reaction_list:
-            new_core_rxns.append(rxn)
-
-    rmg.reactionModel.core.reactions = new_core_rxns
-    return rmg
 
 def saveChemkinFile(path, species, reactions, verbose = True):
     from rmgpy.chemkin import writeKineticsEntry
@@ -560,6 +548,7 @@ def compute_conversion(target, reactionModel, reactionSystem, reactionSystem_ind
     target_index = reactionModel.core.species.index(target)
 
     #reset reaction system variables:
+    logging.info('No. of rxns in core reactions: {}'.format(len(reactionModel.core.reactions)))
     reactionSystem.initializeModel(\
         reactionModel.core.species, reactionModel.core.reactions,\
         reactionModel.edge.species, reactionModel.edge.reactions, \
@@ -582,17 +571,16 @@ def reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index)
     """
 
     # reduce model with the tolerance specified earlier:
-    reactions_to_be_removed = find_unimportant_reactions(rmg, tolerance)
+    important_reactions = find_important_reactions(rmg, tolerance)
 
     original_size = len(reactionModel.core.reactions)
-    logging.info('Initial model size: {}'.format(original_size))
 
-    no_unimportant_rxns = len(reactions_to_be_removed)
-    logging.info('Number of unimportant reactions: {}'.format(no_unimportant_rxns))
+    no_important_reactions = len(important_reactions)
+    logging.info('Number of important reactions: {}'.format(no_important_reactions))
 
-    # remove reactions from core:
+    #set the core reactions to the reduced reaction set:
     original_reactions = reactionModel.core.reactions
-    remove_reactions_from_model(rmg, reactions_to_be_removed)
+    rmg.reactionModel.core.reactions = important_reactions
 
     #re-compute conversion: 
     conversion = compute_conversion(target, rmg.reactionModel,\
@@ -602,7 +590,7 @@ def reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index)
     #reset the reaction model to its original state:
     rmg.reactionModel.core.reactions = original_reactions
 
-    logging.info('Conversion of reduced model ({} rxns): {:.2f}%'.format(original_size - no_unimportant_rxns, conversion * 100))
+    logging.info('Conversion of reduced model ({} rxns): {:.2f}%'.format(no_important_reactions, conversion * 100))
     return conversion
 
 def optimize_tolerance(target, reactionModel, rmg, reaction_system_index, error, orig_conv):
