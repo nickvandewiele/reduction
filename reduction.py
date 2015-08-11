@@ -10,6 +10,9 @@ logging.basicConfig(level=logging.INFO)
 
 #local imports
 
+#global variables
+reactions = None
+
 try:
     from scoop import shared
     from scoop.futures import map as map_
@@ -163,10 +166,12 @@ def simulate_all(rmg):
 
 
 def initialize(wd, rxns):
-    global working_dir
+    global working_dir, reactions
     working_dir = wd
     assert os.path.isdir(working_dir)
     
+    #set global variable here such that functions executed in the root worker have access to it.
+    reactions = rxns
     reduce_reactions = [ReductionReaction(rxn) for rxn in rxns]
     shared.setConst(reactions = reduce_reactions)
 
@@ -186,10 +191,12 @@ def find_important_reactions(rmg, tolerance):
         a list of rxns that can be removed.
     """
 
+    global reactions
+    
     # run the simulation, creating concentration profiles for each reaction system defined in input.
     simdata = simulate_all(rmg)
 
-    reduce_reactions = shared.getConst('reactions')
+    reduce_reactions = [ReductionReaction(rxn) for rxn in reactions]
 
     """
     Tolerance to decide whether a reaction is unimportant for the formation/destruction of a species
