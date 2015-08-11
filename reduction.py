@@ -11,8 +11,10 @@ logging.basicConfig(level=logging.INFO)
 
 #local imports
 
-global useSCOOP
-useSCOOP = False
+#initialize global variables:
+useSCOOP = None
+data = None
+reactions = None
 
 try:
     from scoop import shared
@@ -154,7 +156,6 @@ def simulate_all(rmg):
 
     Each element i of the data corresponds to a reaction system.
     """
-    
     reactionModel = rmg.reactionModel
 
     data = []
@@ -167,10 +168,12 @@ def simulate_all(rmg):
         
 
 
-def initialize(wd):
-    global working_dir
+def initialize(wd, useSCOOPflag=False):
+    global working_dir, useSCOOP
     working_dir = wd
     assert os.path.isdir(working_dir)
+
+    useSCOOP = useSCOOPflag
     
 
 def find_unimportant_reactions(rxns, rmg, tolerance):
@@ -188,15 +191,14 @@ def find_unimportant_reactions(rxns, rmg, tolerance):
     Returns:
         a list of rxns that can be removed.
     """
+    global data, reactions
 
     # run the simulation, creating concentration profiles for each reaction system defined in input.
     simdata = simulate_all(rmg)
     if useSCOOP:
         shared.setConst(data = simdata)
     else:
-        global data
         data = simdata
-    # logging.info('Sharing data: {}'.format(data))
 
 
     # start the model reduction
@@ -204,9 +206,8 @@ def find_unimportant_reactions(rxns, rmg, tolerance):
     if useSCOOP:
         shared.setConst(reactions = reduce_reactions)
     else:
-        global reactions
         reactions = reduce_reactions
-    
+
 
     """
     Tolerance to decide whether a reaction is unimportant for the formation/destruction of a species
@@ -246,12 +247,13 @@ def assess_reaction(rxn, reactionSystems, tolerance):
 
 
     """
+    global data, reactions
+    
     logging.debug('Assessing reaction {}'.format(rxn))
     if useSCOOP:
         reactions = shared.getConst('reactions')
         data = shared.getConst('data')
-    else:
-        global data, reactions
+
 
 
     # read in the intermediate state variables
