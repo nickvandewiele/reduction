@@ -5,8 +5,6 @@ import os.path
 import numpy as np
 import re
 from collections import Counter
-import logging
-logging.basicConfig(level=logging.INFO)
 
 #local imports
 
@@ -17,6 +15,7 @@ try:
     from scoop import shared
     from scoop.futures import map as map_
     from scoop import logger as logging
+    logging.setLevel(20)#10 : debug, 20: info
 except ImportError:
     map_ = map
     import logging
