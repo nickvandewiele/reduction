@@ -10,11 +10,6 @@ logging.basicConfig(level=logging.INFO)
 
 #local imports
 
-#initialize global variables:
-useSCOOP = None
-data = None
-reactions = None
-
 try:
     from scoop import shared
     from scoop.futures import map as map_
@@ -27,7 +22,7 @@ except ImportError:
 from rmgpy.chemkin import getSpeciesIdentifier, loadChemkinFile
 from rmgpy.rmg.main import RMG
 from rmgpy.solver.base import TerminationTime, TerminationConversion
-
+from workerwrapper import WorkerWrapper
 """
 Guidelines for input:
 
@@ -167,12 +162,10 @@ def simulate_all(rmg):
         
 
 
-def initialize(wd, useSCOOPflag=False):
-    global working_dir, useSCOOP
+def initialize(wd):
+    global working_dir
     working_dir = wd
     assert os.path.isdir(working_dir)
-
-    useSCOOP = useSCOOPflag
     
 
 def find_unimportant_reactions(rxns, rmg, tolerance):
@@ -190,22 +183,15 @@ def find_unimportant_reactions(rxns, rmg, tolerance):
     Returns:
         a list of rxns that can be removed.
     """
-    global data, reactions
 
     # run the simulation, creating concentration profiles for each reaction system defined in input.
     simdata = simulate_all(rmg)
-    if useSCOOP:
-        shared.setConst(data = simdata)
-    else:
-        data = simdata
+    shared.setConst(data = simdata)
 
 
     # start the model reduction
     reduce_reactions = [ReductionReaction(rxn) for rxn in rxns]
-    if useSCOOP:
-        shared.setConst(reactions = reduce_reactions)
-    else:
-        reactions = reduce_reactions
+    shared.setConst(reactions = reduce_reactions)
 
 
     """
@@ -221,7 +207,7 @@ def find_unimportant_reactions(rxns, rmg, tolerance):
     """
 
     N = len(reduce_reactions)
-    boolean_array = list(map_(assess_reaction, reduce_reactions, [rmg.reactionSystems] * N, [tolerance] * N))
+    boolean_array = list(map_(WorkerWrapper(assess_reaction), reduce_reactions, [rmg.reactionSystems] * N, [tolerance] * N))
 
     reactions_to_be_removed = []
     for isImport, rxn in zip(boolean_array, reduce_reactions):
@@ -246,16 +232,15 @@ def assess_reaction(rxn, reactionSystems, tolerance):
 
 
     """
-    global data, reactions
     
     logging.debug('Assessing reaction {}'.format(rxn))
-    if useSCOOP:
-        reactions = shared.getConst('reactions')
-        data = shared.getConst('data')
 
-
+    reactions = shared.getConst('reactions')
+    data = shared.getConst('data')
+    
 
     # read in the intermediate state variables
+
     for datum, reactionSystem in zip(data, reactionSystems):    
         T, P = reactionSystem.T.value_si, reactionSystem.P.value_si
         
