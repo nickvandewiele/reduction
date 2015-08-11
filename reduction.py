@@ -171,11 +171,10 @@ def initialize(wd, rxns):
     shared.setConst(reactions = reduce_reactions)
 
 
-def find_unimportant_reactions(rxns, rmg, tolerance):
+def find_unimportant_reactions(rmg, tolerance):
     """
     This function:
 
-    - loops over all rxns
     - loops over all the species involved in a specific reaction
     - decides whether the specific reaction is important for the species.
 
@@ -193,7 +192,7 @@ def find_unimportant_reactions(rxns, rmg, tolerance):
 
 
     reduce_reactions = shared.getConst('reactions')
-    
+
     """
     Tolerance to decide whether a reaction is unimportant for the formation/destruction of a species
 
@@ -588,7 +587,7 @@ def reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index)
     """
 
     # reduce model with the tolerance specified earlier:
-    reactions_to_be_removed = find_unimportant_reactions(reactionModel.core.reactions, rmg, tolerance)
+    reactions_to_be_removed = find_unimportant_reactions(rmg, tolerance)
 
     original_size = len(reactionModel.core.reactions)
     logging.info('Initial model size: {}'.format(original_size))
