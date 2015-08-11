@@ -1,14 +1,10 @@
 
 #global imports
-import itertools
 import copy
 import os.path
-import csv
 import numpy as np
-from math import ceil
 import scipy.optimize
 import re
-import random
 from collections import Counter
 import logging
 logging.basicConfig(level=logging.INFO)
@@ -153,7 +149,7 @@ def simulate_one(reactionModel, atol, rtol, reactionSystem):
 
 def simulate_all(rmg):
     """
-    Simulate the RMG job, generating an output csv file
+    Simulate the RMG job, 
     for each of the simulated reaction systems.
 
     Each element i of the data corresponds to a reaction system.
@@ -193,7 +189,7 @@ def find_unimportant_reactions(rxns, rmg, tolerance):
         a list of rxns that can be removed.
     """
 
-    # run the simulation, creating csv concentration profiles for each reaction system defined in input.
+    # run the simulation, creating concentration profiles for each reaction system defined in input.
     simdata = simulate_all(rmg)
     if useSCOOP:
         shared.setConst(data = simdata)
@@ -237,9 +233,6 @@ def find_unimportant_reactions(rxns, rmg, tolerance):
     return [rxn.rmg_reaction for rxn in reactions_to_be_removed]
     
     return myfilter
-
-def mock_assess_reaction(rxn, reactionSystems, tolerance):
-    return bool(random.getrandbits(1))
 
 def assess_reaction(rxn, reactionSystems, tolerance):
     """
