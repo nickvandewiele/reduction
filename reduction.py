@@ -260,7 +260,7 @@ def assess_reaction(rxn, reactionSystems, tolerance, data):
         need to be carried out.
         """
         
-        timesteps = len(profile) / 4
+        timesteps = len(profile) / 2
         logging.debug('Evaluating the importance of a reaction at {} time samples.'.format(timesteps))
 
         assert timesteps <= len(profile)
@@ -605,7 +605,7 @@ def optimize_tolerance(target, reactionModel, rmg, reaction_system_index, error,
     Increment the trial tolerance from a very low value until the introduced error is greater than the parameter threshold.
     """
 
-    start = 1E-8
+    start = 1E-20
     incr = 10
     tolmax = 1
 
