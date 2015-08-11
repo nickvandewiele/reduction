@@ -32,7 +32,7 @@ Guidelines for input:
 - 
 """
 
-CLOSE_TO_ZERO = 1E-10
+CLOSE_TO_ZERO = 1E-20
 
 class ReductionReaction(object):
     """
