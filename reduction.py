@@ -6,11 +6,12 @@ import os.path
 import csv
 import numpy as np
 from math import ceil
-from scipy.optimize import minimize
+import scipy.optimize
 import re
 import random
 from collections import Counter
 import logging
+logging.basicConfig(level=logging.INFO)
 
 #local imports
 
@@ -228,6 +229,7 @@ def find_unimportant_reactions(rxns, rmg, tolerance):
 
     reactions_to_be_removed = []
     for isImport, rxn in zip(boolean_array, reduce_reactions):
+        logging.debug('Is rxn {rxn} important? {isImport}'.format(**locals()))
         if not isImport:
             reactions_to_be_removed.append(rxn)
 
@@ -251,7 +253,7 @@ def assess_reaction(rxn, reactionSystems, tolerance):
 
 
     """
-    logging.info('Assessing reaction {}'.format(rxn))
+    logging.debug('Assessing reaction {}'.format(rxn))
     if useSCOOP:
         reactions = shared.getConst('reactions')
         data = shared.getConst('data')
@@ -651,7 +653,6 @@ def objective(tolerance, target, reactionModel, rmg, reaction_system_index, allo
     0 < x < 1
     
     """
-    tolerance = tolerance[0]
     Xred = reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index)
     
     dev = (Xred - Xorig) / Xorig
@@ -673,15 +674,14 @@ def optimize_tolerance(target, reactionModel, rmg, reaction_system_index, error,
     """
     Unconstrained minimization with bounds on the variable x.
     """
-    x0 = 1e-3#initial guess
-    logging.info('Initial guess for the reduction tolerance: {}'.format(x0))
+    # bounds
+    a = 1E-8
+    b = 1
 
-    res = minimize(objective, np.array([x0]),\
-     args=(target, reactionModel, rmg, reaction_system_index, error, orig_conv),\
-     bounds=[(0,1)], tol=1e-8, options={'disp': True},callback = callback_x)#method='nelder-mead',\
-     
-    logging.info(res)
-    return res.x
+    x0 = scipy.optimize.bisect(objective, a, b,\
+     args=(target, reactionModel, rmg, reaction_system_index, error, orig_conv))
+
+    return x0
 
 class ConcentrationListener(object):
     """Returns the species concentration profiles at each time step."""
