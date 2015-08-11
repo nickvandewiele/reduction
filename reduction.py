@@ -188,8 +188,6 @@ def find_unimportant_reactions(rmg, tolerance):
 
     # run the simulation, creating concentration profiles for each reaction system defined in input.
     simdata = simulate_all(rmg)
-    shared.setConst(data = simdata)
-
 
     reduce_reactions = shared.getConst('reactions')
 
@@ -206,7 +204,7 @@ def find_unimportant_reactions(rmg, tolerance):
     """
 
     N = len(reduce_reactions)
-    boolean_array = list(map_(WorkerWrapper(assess_reaction), reduce_reactions, [rmg.reactionSystems] * N, [tolerance] * N))
+    boolean_array = list(map_(WorkerWrapper(assess_reaction), reduce_reactions, [rmg.reactionSystems] * N, [tolerance] * N, [simdata] * N))
 
     reactions_to_be_removed = []
     for isImport, rxn in zip(boolean_array, reduce_reactions):
@@ -216,10 +214,8 @@ def find_unimportant_reactions(rmg, tolerance):
 
 
     return [rxn.rmg_reaction for rxn in reactions_to_be_removed]
-    
-    return myfilter
 
-def assess_reaction(rxn, reactionSystems, tolerance):
+def assess_reaction(rxn, reactionSystems, tolerance, data):
     """
     Returns whether the reaction is important or not in the reactions.
 
@@ -235,7 +231,6 @@ def assess_reaction(rxn, reactionSystems, tolerance):
     logging.debug('Assessing reaction {}'.format(rxn))
 
     reactions = shared.getConst('reactions')
-    data = shared.getConst('data')
     
 
     # read in the intermediate state variables
