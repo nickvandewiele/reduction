@@ -162,11 +162,14 @@ def simulate_all(rmg):
         
 
 
-def initialize(wd):
+def initialize(wd, rxns):
     global working_dir
     working_dir = wd
     assert os.path.isdir(working_dir)
     
+    reduce_reactions = [ReductionReaction(rxn) for rxn in rxns]
+    shared.setConst(reactions = reduce_reactions)
+
 
 def find_unimportant_reactions(rxns, rmg, tolerance):
     """
@@ -189,11 +192,8 @@ def find_unimportant_reactions(rxns, rmg, tolerance):
     shared.setConst(data = simdata)
 
 
-    # start the model reduction
-    reduce_reactions = [ReductionReaction(rxn) for rxn in rxns]
-    shared.setConst(reactions = reduce_reactions)
-
-
+    reduce_reactions = shared.getConst('reactions')
+    
     """
     Tolerance to decide whether a reaction is unimportant for the formation/destruction of a species
 
