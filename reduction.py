@@ -538,7 +538,7 @@ def saveChemkinFile(path, species, reactions, verbose = True):
     with open(path, 'w') as f:
         f.write(s)
 
-def compute_conversion(target, reactionModel, reactionSystem, reactionSystem_index, atol, rtol):
+def compute_conversion(target_label, reactionModel, reactionSystem, reactionSystem_index, atol, rtol):
     """
     Computes the conversion of a target molecule by
 
@@ -550,6 +550,8 @@ def compute_conversion(target, reactionModel, reactionSystem, reactionSystem_ind
     - fetching the computed moles variable y
     - computing conversion
     """
+
+    target = search_target(target_label, reactionSystem)
 
     target_index = reactionModel.core.species.index(target)
 
@@ -599,10 +601,13 @@ def reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index)
     logging.info('Conversion of reduced model ({} rxns): {:.2f}%'.format(no_important_reactions, conversion * 100))
     return conversion
 
-def optimize_tolerance(target, reactionModel, rmg, reaction_system_index, error, orig_conv):
+def optimize_tolerance(target_label, reactionModel, rmg, reaction_system_index, error, orig_conv):
     """
     Increment the trial tolerance from a very low value until the introduced error is greater than the parameter threshold.
     """
+
+    target = search_target(target_label, rmg.reactionSystems[reaction_system_index])
+
 
     start = 1E-20
     incr = 10
@@ -636,3 +641,12 @@ class ConcentrationListener(object):
 
     def update(self, subject):
         self.data.append((subject.t , subject.coreSpeciesConcentrations))
+
+def search_target(target_label, reactionSystem):
+    target = None
+    for k in reactionSystem.initialMoleFractions.keys():
+        if k.label == target_label:
+            target = k
+            break
+    assert target is not None, '{} could not be found...'.format(target_label)
+    return target
