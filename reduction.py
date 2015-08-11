@@ -23,9 +23,9 @@ try:
     from scoop.futures import map as map_
     from scoop import logger as logging
 except ImportError:
-    logging.error('Import Error!')
     map_ = map
     import logging
+    logging.error('Import Error!')
 
 from rmgpy.chemkin import getSpeciesIdentifier, loadChemkinFile
 from rmgpy.rmg.main import RMG
@@ -331,14 +331,10 @@ def isImportant(rxn, species_i, reactions, reactant_or_product, tolerance, T, P,
     rij = calc_rij(rxn, species_i, reactant_or_product, T, P, coreSpeciesConcentrations) 
     Ri = calc_Ri(species_i, rij, reactions, reactant_or_product, T, P, coreSpeciesConcentrations)
 
-    # assert Ri != 0, "rij: {0}, Ri: {1}, rxn: {2}, species: {3}, reactant: {4}"\
-    # .format(rij, Ri, rxn, species_i, reactant_or_product)
+    logging.debug("rij: {rij}, Ri: {Ri}, rxn: {rxn}, species: {species_i}, reactant: {reactant_or_product}, tol: {tolerance}"\
+    .format(**locals()))
 
-    # if rij == 0  and Ri == 0:
-    
     if np.any(np.absolute([rij, Ri]) < CLOSE_TO_ZERO):
-       # print "rij: {0}, Ri: {1}, rxn: {2}, species: {3}, reactant: {4}, alpha: {5}, tolerance: {6}"\
-       #  .format(rij, Ri, rxn, species_i, reactant_or_product, 'N/A', tolerance) 
        return False
 
     else:
@@ -459,6 +455,7 @@ def calc_Rf(spc_i, reactions, reactant_or_product, T, P, coreSpeciesConcentratio
             rij = calc_rij(reaction, spc_i,  reactant_or_product, T, P, coreSpeciesConcentrations)
             rate = rate + rij
 
+    logging.debug('Rf: {rate}'.format(**locals()))
 
     return rate
     
