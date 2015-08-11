@@ -3,7 +3,6 @@
 import copy
 import os.path
 import numpy as np
-import scipy.optimize
 import re
 from collections import Counter
 import logging
@@ -627,53 +626,33 @@ def reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index)
     logging.info('Conversion of reduced model ({} rxns): {:.2f}%'.format(original_size - no_unimportant_rxns, conversion * 100))
     return conversion
 
-def objective(tolerance, target, reactionModel, rmg, reaction_system_index, allowed_error, Xorig):
-    """
-    Objective function to be minimized as a function of the reduction tolerance
-    with x the reduction tolerance.
-
-    The reduction tolerance is used to compute a reduced model. For the reduced model, 
-    the conversion of the target parameter is computed and compared to the conversion
-    of the original Xorig, non-reduced model.
-
-    The deviation between the conversions of the original and reduced model is computed:
-    dev = (Xred - Xorig) / Xorig
-
-    The function f to be minimized is taken as:
-    f = dev^2 - allowed_error^2
-
-    0 < x < 1
-    
-    """
-    Xred = reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index)
-    
-    dev = (Xred - Xorig) / Xorig
-    logging.info('Deviation between original and reduced conversion: {:.2f}%'.format(dev * 100))
-
-    scale = 1e3 #rescale your objective function so that the differences and derivatives are larger
-    f = (dev * dev - allowed_error * allowed_error) * scale
-
-    logging.info('Objective function value: {:.2f}'.format(f))
-
-    # derror = dconv(x)
-    # df = 2 * dev * derror
-    return f
-
-def callback_x(x):
-    logging.info('Current parameter vector: {}'.format(x))
-
 def optimize_tolerance(target, reactionModel, rmg, reaction_system_index, error, orig_conv):
     """
-    Unconstrained minimization with bounds on the variable x.
+    Increment the trial tolerance from a very low value until the introduced error is greater than the parameter threshold.
     """
-    # bounds
-    a = 1E-8
-    b = 1
 
-    x0 = scipy.optimize.bisect(objective, a, b,\
-     args=(target, reactionModel, rmg, reaction_system_index, error, orig_conv))
+    start = 1E-8
+    incr = 10
+    tolmax = 1
 
-    return x0
+    tol = start
+    trial = start
+    while True:
+        logging.info('Trial tolerance: {trial:.2E}'.format(**locals()))
+        Xred = reduce_compute(trial, target, reactionModel, rmg, reaction_system_index)
+        dev = np.abs((Xred - orig_conv) / orig_conv)
+        logging.info('Deviation: {dev:.2f}'.format(**locals()))
+
+        if dev > error or trial > tolmax:
+            break
+
+        tol = trial
+        trial = trial * incr
+
+    if tol == start:
+        logging.error('Starting value for tolerance was too high...')
+
+    return tol
 
 class ConcentrationListener(object):
     """Returns the species concentration profiles at each time step."""
