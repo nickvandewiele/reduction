@@ -210,8 +210,12 @@ def find_important_reactions(rmg, tolerance):
     model by a few reactions.
     """
 
-    N = len(reduce_reactions)
-    boolean_array = list(map_(WorkerWrapper(assess_reaction), reduce_reactions, [rmg.reactionSystems] * N, [tolerance] * N, [simdata] * N))
+    CHUNKSIZE = 20
+    boolean_array = []
+    for chunk in chunks(reduce_reactions,CHUNKSIZE):
+        N = len(chunk)
+        partial_results = list(map_(WorkerWrapper(assess_reaction), chunk, [rmg.reactionSystems] * N, [tolerance] * N, [simdata] * N))
+        boolean_array.extend(partial_results)
 
     important_rxns = []
     for isImport, rxn in zip(boolean_array, reduce_reactions):
@@ -731,6 +735,11 @@ def load(rmg_inputFile, reductionFile, chemkinFile):
     target, tolerance = loadReductionInput(reductionFile)
 
     return rmg, target, tolerance
+
+def chunks(l, n):
+    """Yield successive n-sized chunks from l."""
+    for i in xrange(0, len(l), n):
+        yield l[i:i+n]
 
 if __name__ == '__main__':
     main()
