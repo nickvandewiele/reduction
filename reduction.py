@@ -5,6 +5,7 @@ import os.path
 import numpy as np
 import re
 from collections import Counter
+import sys
 
 #local imports
 
@@ -538,6 +539,16 @@ def saveChemkinFile(path, species, reactions, verbose = True):
     with open(path, 'w') as f:
         f.write(s)
 
+def search_target(target_label, reactionSystem):
+
+    for k in reactionSystem.initialMoleFractions.keys():
+        if k.label == target_label:
+            target = k
+            break
+    assert target is not None, '{} could not be found...'.format(target_label)
+    return target
+
+
 def compute_conversion(target_label, reactionModel, reactionSystem, reactionSystem_index, atol, rtol):
     """
     Computes the conversion of a target molecule by
@@ -552,7 +563,6 @@ def compute_conversion(target_label, reactionModel, reactionSystem, reactionSyst
     """
 
     target = search_target(target_label, reactionSystem)
-
     target_index = reactionModel.core.species.index(target)
 
     #reset reaction system variables:
@@ -572,7 +582,7 @@ def compute_conversion(target_label, reactionModel, reactionSystem, reactionSyst
     conv = 1 - (reactionSystem.y[target_index] / y0[target_index])
     return conv
 
-def reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index):
+def reduce_compute(tolerance, target_label, reactionModel, rmg, reaction_system_index):
     """
     Reduces the model for the given tolerance and evaluates the 
     target conversion.
@@ -591,7 +601,7 @@ def reduce_compute(tolerance, target, reactionModel, rmg, reaction_system_index)
     rmg.reactionModel.core.reactions = important_reactions
 
     #re-compute conversion: 
-    conversion = compute_conversion(target, rmg.reactionModel,\
+    conversion = compute_conversion(target_label, rmg.reactionModel,\
      rmg.reactionSystems[reaction_system_index], reaction_system_index,\
      rmg.absoluteTolerance, rmg.relativeTolerance)
 
@@ -606,8 +616,6 @@ def optimize_tolerance(target_label, reactionModel, rmg, reaction_system_index, 
     Increment the trial tolerance from a very low value until the introduced error is greater than the parameter threshold.
     """
 
-    target = search_target(target_label, rmg.reactionSystems[reaction_system_index])
-
 
     start = 1E-20
     incr = 10
@@ -617,7 +625,7 @@ def optimize_tolerance(target_label, reactionModel, rmg, reaction_system_index, 
     trial = start
     while True:
         logging.info('Trial tolerance: {trial:.2E}'.format(**locals()))
-        Xred = reduce_compute(trial, target, reactionModel, rmg, reaction_system_index)
+        Xred = reduce_compute(trial, target_label, reactionModel, rmg, reaction_system_index)
         dev = np.abs((Xred - orig_conv) / orig_conv)
         logging.info('Deviation: {dev:.2f}'.format(**locals()))
 
@@ -642,11 +650,87 @@ class ConcentrationListener(object):
     def update(self, subject):
         self.data.append((subject.t , subject.coreSpeciesConcentrations))
 
-def search_target(target_label, reactionSystem):
+
+def main():
+    
+    # python -m scoop reduction.py models/minimal/input.py models/minimal/reduction.py models/minimal/chemkin/chem.inp
+    inputFile, reductionFile, chemkinFile = sys.argv[-3:]
+
+    for f in [inputFile, reductionFile, chemkinFile]:
+        assert os.path.isfile(f)
+
+    inputDirectory = os.path.abspath(os.path.dirname(inputFile))
+    output_directory = inputDirectory
+
+    rmg, target_label, error = load(inputFile, reductionFile, chemkinFile)
+
+    reactionModel = rmg.reactionModel
+    initialize(rmg.outputDirectory, reactionModel.core.reactions)
+
+    atol, rtol = rmg.absoluteTolerance, rmg.relativeTolerance
+    index = 0
+    reactionSystem = rmg.reactionSystems[index]
+
+    print 'Allowed error in target conversion: {0:.0f}%'.format(error * 100)
+    
+    #compute original target conversion
+    Xorig = compute_conversion(target_label, reactionModel, reactionSystem, index,\
+     rmg.absoluteTolerance, rmg.relativeTolerance)
+    print 'Original target conversion: {0:.0f}%'.format(Xorig * 100)
+
+    # optimize reduction tolerance
+    tol = optimize_tolerance(target_label, reactionModel, rmg, index, error, Xorig)
+    print 'Optimized tolerance: {:.0E}'.format(tol)
+
+def loadReductionInput(reductionFile):
+    """
+    Load an reduction job from the input file located at `reductionFile`
+    """
+
     target = None
-    for k in reactionSystem.initialMoleFractions.keys():
-        if k.label == target_label:
-            target = k
-            break
-    assert target is not None, '{} could not be found...'.format(target_label)
-    return target
+    tolerance = -1
+
+    full_path = os.path.abspath(os.path.expandvars(reductionFile))
+    try:
+        f = open(full_path)
+    except IOError, e:
+        logging.error('The input file "{0}" could not be opened.'.format(full_path))
+        logging.info('Check that the file exists and that you have read access.')
+        raise e
+
+    logging.info('Reading input file "{0}"...'.format(full_path))
+    
+    global_context = { '__builtins__': None }
+    local_context = {
+        '__builtins__': None,
+        'target': target,
+        'tolerance': tolerance
+    }
+
+    try:
+        exec f in global_context, local_context
+
+        target = local_context['target']
+        tolerance = local_context['tolerance']
+
+    except (NameError, TypeError, SyntaxError), e:
+        logging.error('The input file "{0}" was invalid:'.format(full_path))
+        logging.exception(e)
+        raise
+    finally:
+        f.close()
+
+    assert target is not None
+    assert tolerance != -1
+
+    return target, tolerance
+
+def load(rmg_inputFile, reductionFile, chemkinFile):
+    
+    rmg = loadRMGPyJob(rmg_inputFile, chemkinFile)
+    target, tolerance = loadReductionInput(reductionFile)
+
+    return rmg, target, tolerance
+
+if __name__ == '__main__':
+    main()
