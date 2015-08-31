@@ -210,7 +210,7 @@ def find_important_reactions(rmg, tolerance):
     model by a few reactions.
     """
 
-    CHUNKSIZE = 20
+    CHUNKSIZE = 40
     boolean_array = []
     for chunk in chunks(reduce_reactions,CHUNKSIZE):
         N = len(chunk)
